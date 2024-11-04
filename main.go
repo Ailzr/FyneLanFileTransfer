@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -91,7 +92,7 @@ func startFileServer(filePath string, linkLabel *widget.Entry, allLinks *widget.
 	})
 
 	// 获取本地 IP 地址
-	ip := getLocalIP()
+	ip := getConnectedPhysicalIP()
 	port := "32123" // 固定端口
 	downloadURL := fmt.Sprintf("http://%s:%s/send-file/%s", ip, port, randomString)
 	linkLabel.SetText(downloadURL)
@@ -113,21 +114,66 @@ func generateRandomString(length int) string {
 	return hex.EncodeToString(bytes)
 }
 
-func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
+func getConnectedPhysicalIP() string {
+	interfaces, err := net.Interfaces()
 	if err != nil {
+		fmt.Println("无法获取网络接口:", err)
 		return "localhost"
 	}
 
-	for _, address := range addrs {
-		// 检查 IP 地址类型，并且排除回环地址
-		if ipNet, ok := address.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
-			if ipNet.IP.To4() != nil {
-				return ipNet.IP.String()
+	for _, iface := range interfaces {
+		// 排除未启用、回环接口或没有有效硬件地址的接口
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 || len(iface.HardwareAddr) == 0 {
+			continue
+		}
+
+		// 过滤常见的虚拟网卡或 VPN 接口的硬件地址前缀
+		if isVirtualOrVPN(iface.HardwareAddr.String()) {
+			continue
+		}
+
+		// 过滤名字中包含VPN字段的网卡
+		if strings.Contains(iface.Name, "VPN") {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+				// 仅返回 IPv4 地址
+				if ip := ipNet.IP.To4(); ip != nil {
+					return ip.String()
+				}
 			}
 		}
 	}
-	return "localhost"
+	return "localhost" // 无有效连接时返回 localhost
+}
+
+// 判断硬件地址是否属于虚拟网卡或 VPN
+func isVirtualOrVPN(macAddr string) bool {
+	// 常见虚拟网卡和 VPN 的 MAC 地址前缀（可以根据实际情况扩展或修改）
+	virtualPrefixes := []string{
+		"00:05:69", // VMware
+		"00:0C:29", // VMware
+		"00:50:56", // VMware
+		"08:00:27", // VirtualBox
+		"52:54:00", // QEMU, KVM
+		"00:1C:42", // Parallels
+		"00:16:3E", // Xen
+		"00:1D:D8", // Microsoft Hyper-V
+	}
+
+	for _, prefix := range virtualPrefixes {
+		if strings.HasPrefix(macAddr, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // updateAllLinks 更新并展示所有已生成的下载链接
@@ -137,7 +183,7 @@ func updateAllLinks(allLinks *widget.Entry) {
 
 	var linksText string
 	for key, filePath := range fileMap {
-		linksText += fmt.Sprintf("文件: %s\n链接: http://%s:%s/send-file/%s\n\n", filepath.Base(filePath), getLocalIP(), "32123", key)
+		linksText += fmt.Sprintf("文件: %s\n链接: http://%s:%s/send-file/%s\n\n", filepath.Base(filePath), getConnectedPhysicalIP(), "32123", key)
 	}
 
 	allLinks.SetText(linksText)
