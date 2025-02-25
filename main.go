@@ -114,6 +114,28 @@ func startFileServer(filePath string, linkLabel *widget.Entry, allLinks *widget.
 		mu.Unlock()
 
 		fileName := filepath.Base(file)
+		fileExt := filepath.Ext(file)
+
+		// 映射常见文件类型
+		contentTypes := map[string]string{
+			".txt": "text/plain",
+			".jpg": "image/jpeg",
+			".png": "image/png",
+			".pdf": "application/pdf",
+			".mp3": "audio/mpeg",
+			".mp4": "video/mp4",
+			".zip": "application/zip",
+			".exe": "application/octet-stream",
+			".tar": "application/x-tar",
+		}
+
+		// 设置 Content-Type
+		if cType, found := contentTypes[fileExt]; found {
+			w.Header().Set("Content-Type", cType)
+		} else {
+			w.Header().Set("Content-Type", "application/octet-stream")
+		}
+
 		w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
 		http.ServeFile(w, r, file)
 	})
