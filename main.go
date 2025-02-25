@@ -60,14 +60,41 @@ func main() {
 		go startFileServer(selectedFilePath, linkEntry, allLinks)
 	})
 
+	// 主页处理函数
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintln(w, "<html><head><title>文件下载</title></head><body>")
+		fmt.Fprintln(w, "<h2>可用下载文件</h2><ul>")
+		if len(fileMap) == 0 {
+			fmt.Fprintf(w, "<p>暂无可下载文件</p>")
+		} else {
+			for key, filePath := range fileMap {
+				downloadURL := fmt.Sprintf("http://%s:%s/send-file/%s", getConnectedPhysicalIP(), "32123", key)
+				fmt.Fprintf(w, "<li><a href='%s'>%s</a></li>", downloadURL, filepath.Base(filePath))
+			}
+		}
+		fmt.Fprintln(w, "</ul></body></html>")
+	})
+
+	serviceUrl := "http://" + getConnectedPhysicalIP() + ":32123/"
+	serviceEntry := widget.NewEntry()
+	serviceEntry.SetText(serviceUrl)
+
 	w.SetContent(container.NewVBox(
 		selectButton,
 		selectedFile,
 		startServerButton,
 		linkEntry,
-		widget.NewLabel("已生成的下载链接："),
+		widget.NewLabel("已生成的下载链接：\n可通过总览下载该链接总览下载:"),
+		serviceEntry,
 		scrollableLinks,
 	))
+	go func() {
+		_ = http.ListenAndServe(":32123", nil)
+	}()
 	w.ShowAndRun()
 }
 
@@ -100,7 +127,7 @@ func startFileServer(filePath string, linkLabel *widget.Entry, allLinks *widget.
 	// 更新所有生成的链接信息
 	updateAllLinks(allLinks)
 
-	fmt.Println("服务器启动, 文件地址:", downloadURL)
+	//fmt.Println("服务器启动, 文件地址:", downloadURL)
 	_ = http.ListenAndServe(":"+port, nil)
 }
 
