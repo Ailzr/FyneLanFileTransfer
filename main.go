@@ -8,24 +8,62 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 )
 
 var (
+	w                fyne.Window
 	selectedFilePath string
 	fileMap          = make(map[string]string) // 用于存储随机字符串和文件路径的映射
 	mu               sync.Mutex                // 互斥锁用于保护 map
 )
 
+const (
+	ipcPort = "127.0.0.1:32123"
+)
+
 func main() {
+
+	//检测程序是否已经运行
+	listener, err := net.Listen("tcp", ipcPort)
+	if err != nil {
+		// 已有实例运行，发送激活信号并退出
+		sendActivateSignal()
+		os.Exit(0)
+	}
+	defer listener.Close()
+
+	// 监听 IPC 激活信号
+	go listenForActivateSignal(listener)
+
 	a := app.New()
-	w := a.NewWindow("文件传输")
+	w = a.NewWindow("文件传输")
+	w.SetTitle("文件传输")
 	w.Resize(fyne.NewSize(800, 600))
+
+	w.SetIcon(resourceFileTransferIco)
+
+	// 系统托盘
+	if desk, ok := a.(desktop.App); ok {
+		m := fyne.NewMenu("托盘菜单",
+			fyne.NewMenuItem("显示", func() {
+				w.Show()
+			}))
+		desk.SetSystemTrayMenu(m)
+		desk.SetSystemTrayIcon(resourceFileTransferIco)
+	}
+
+	// 将关闭按钮修改为隐藏
+	w.SetCloseIntercept(func() {
+		w.Hide()
+	})
 
 	// Label：显示已选择的文件
 	selectedFile := widget.NewLabel("未选择文件")
@@ -236,4 +274,34 @@ func updateAllLinks(allLinks *widget.Entry) {
 	}
 
 	allLinks.SetText(linksText)
+}
+
+// 发送激活信号到已有实例
+func sendActivateSignal() {
+	conn, err := net.Dial("tcp", ipcPort)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	conn.Write([]byte("activate"))
+}
+
+// 监听激活信号
+func listenForActivateSignal(listener net.Listener) {
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			continue
+		}
+		buf := make([]byte, 8)
+		conn.Read(buf)
+		if string(buf) == "activate" {
+			// 主线程中更新 UI
+			fyne.CurrentApp().SendNotification(fyne.NewNotification("提示", "已激活窗口"))
+			if w != nil {
+				w.Show()
+			}
+		}
+		conn.Close()
+	}
 }
