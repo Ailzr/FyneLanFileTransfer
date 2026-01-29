@@ -26,13 +26,16 @@ var (
 )
 
 const (
-	ipcPort = "127.0.0.1:32123"
+	ipcHost  = "127.0.0.1"
+	ipcPort  = "32124"
+	httpHost = "0.0.0.0"
+	httpPort = "32123"
 )
 
 func main() {
 
 	//检测程序是否已经运行
-	listener, err := net.Listen("tcp", ipcPort)
+	listener, err := net.Listen("tcp", ipcHost+":"+ipcPort)
 	if err != nil {
 		// 已有实例运行，发送激活信号并退出
 		sendActivateSignal()
@@ -109,14 +112,14 @@ func main() {
 			fmt.Fprintf(w, "<p>暂无可下载文件</p>")
 		} else {
 			for key, filePath := range fileMap {
-				downloadURL := fmt.Sprintf("http://%s:%s/send-file/%s", getConnectedPhysicalIP(), "32123", key)
+				downloadURL := fmt.Sprintf("http://%s:%s/send-file/%s", getConnectedPhysicalIP(), httpPort, key)
 				fmt.Fprintf(w, "<li><a href='%s'>%s</a></li>", downloadURL, filepath.Base(filePath))
 			}
 		}
 		fmt.Fprintln(w, "</ul></body></html>")
 	})
 
-	serviceUrl := "http://" + getConnectedPhysicalIP() + ":32123/"
+	serviceUrl := "http://" + getConnectedPhysicalIP() + ":" + httpPort
 	serviceEntry := widget.NewEntry()
 	serviceEntry.SetText(serviceUrl)
 
@@ -130,7 +133,7 @@ func main() {
 		scrollableLinks,
 	))
 	go func() {
-		_ = http.ListenAndServe(":32123", nil)
+		_ = http.ListenAndServe(httpHost+":"+httpPort, nil)
 	}()
 	w.ShowAndRun()
 }
@@ -177,13 +180,13 @@ func startFileServer(filePath string, linkLabel *widget.Entry, allLinks *widget.
 
 	// 获取本地 IP 地址
 	ip := getConnectedPhysicalIP()
-	port := "32123" // 固定端口
+	port := httpPort // 固定端口
 	downloadURL := fmt.Sprintf("http://%s:%s/send-file/%s", ip, port, randomString)
 	linkLabel.SetText(downloadURL)
 
 	// 更新所有生成的链接信息
 	updateAllLinks(allLinks)
-	
+
 }
 
 // generateRandomString 生成指定长度的随机字符串
@@ -279,7 +282,7 @@ func updateAllLinks(allLinks *widget.Entry) {
 
 	var linksText string
 	for key, filePath := range fileMap {
-		linksText += fmt.Sprintf("文件: %s\n链接: http://%s:%s/send-file/%s\n\n", filepath.Base(filePath), getConnectedPhysicalIP(), "32123", key)
+		linksText += fmt.Sprintf("文件: %s\n链接: http://%s:%s/send-file/%s\n\n", filepath.Base(filePath), getConnectedPhysicalIP(), httpPort, key)
 	}
 
 	allLinks.SetText(linksText)
@@ -287,7 +290,7 @@ func updateAllLinks(allLinks *widget.Entry) {
 
 // 发送激活信号到已有实例
 func sendActivateSignal() {
-	conn, err := net.Dial("tcp", ipcPort)
+	conn, err := net.Dial("tcp", ipcHost+":"+ipcPort)
 	if err != nil {
 		return
 	}
