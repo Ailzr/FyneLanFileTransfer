@@ -94,7 +94,6 @@ func main() {
 			linkEntry.SetText("请先选择文件")
 			return
 		}
-
 		go startFileServer(selectedFilePath, linkEntry, allLinks)
 	})
 
@@ -202,6 +201,20 @@ func generateRandomString(length int) string {
 }
 
 func getConnectedPhysicalIP() string {
+	// 尝试连接一个公网地址（这里用 Google DNS，也可以用 114.114.114.114）
+	// 注意：这里并不会真的建立连接，只是为了触发系统路由表选择最佳本地出口 IP
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		// 如果断网了，或者拨号失败，回退到原来的枚举逻辑
+		return getIPByEnumeration()
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
+}
+
+func getIPByEnumeration() string {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		fmt.Println("无法获取网络接口:", err)
