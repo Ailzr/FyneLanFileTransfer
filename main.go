@@ -136,10 +136,8 @@ func main() {
 }
 
 func startFileServer(filePath string, linkLabel *widget.Entry, allLinks *widget.Entry) {
-	// 生成随机字符串作为URL路径
 	randomString := generateRandomString(12)
 
-	// 存储文件路径与随机字符串的映射
 	mu.Lock()
 	fileMap[randomString] = filePath
 	mu.Unlock()
@@ -185,9 +183,7 @@ func startFileServer(filePath string, linkLabel *widget.Entry, allLinks *widget.
 
 	// 更新所有生成的链接信息
 	updateAllLinks(allLinks)
-
-	//fmt.Println("服务器启动, 文件地址:", downloadURL)
-	_ = http.ListenAndServe(":"+port, nil)
+	
 }
 
 // generateRandomString 生成指定长度的随机字符串
